@@ -195,7 +195,7 @@ The buffer must be visiting an actual file."
   "Return the full path of RAW-FILE."
   (let ((file (if (string-match
 		   (rx bos (? "../") (group (+ any)) eos) raw-file)
-		  (match-string 1 file)
+		  (match-string 1 raw-file)
 		(error "Invalid file %s" raw-file)))
 	(dir (progn (string-match (rx bos (group (+ any)) (? "/") eos) smblog-src-dir)
 		    (match-string 1 smblog-src-dir))))
