@@ -120,9 +120,9 @@ The buffer must be visiting an actual file."
     (goto-char (point-min))
     (let (msgs)
       (while (search-forward-regexp smblog-time-rx nil 'noerror)
-	(let ((level (string-to-int (match-string 1)))
+	(let ((level (string-to-number (match-string 1)))
 	      (file (match-string 2))
-	      (nb (string-to-int (match-string 3)))
+	      (nb (string-to-number (match-string 3)))
 	      (fun (match-string 4))
 	      (start (point))
 	      txt)
@@ -195,7 +195,7 @@ The buffer must be visiting an actual file."
   "Return the full path of RAW-FILE."
   (let ((file (if (string-match
 		   (rx bos (? "../") (group (+ any)) eos) raw-file)
-		  (match-string 1 file)
+		  (match-string 1 raw-file)
 		(error "Invalid file %s" raw-file)))
 	(dir (progn (string-match (rx bos (group (+ any)) (? "/") eos) smblog-src-dir)
 		    (match-string 1 smblog-src-dir))))
