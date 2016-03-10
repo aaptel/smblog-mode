@@ -212,7 +212,8 @@ The buffer must be visiting an actual file."
 	(message (concat "Cannot open file %s\n"
 			 "smblog-src-dir: %s\n"
 			 "          file: %s (any leading ../ removed)\n\n"
-			 "User M-x set-variable smblog-src-dir RET to make it point to the right directory")
+			 "User M-x set-variable smblog-src-dir RET \"your-samba/path\" RET "
+			 "to make it point to the right directory")
 		 fullpath smblog-src-dir file)
       (find-file-other-window fullpath)
       (goto-line ln))))
