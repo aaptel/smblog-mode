@@ -80,6 +80,18 @@
   "Regex matching a log message header")
 
 
+(defface smblog-file-face
+  '((t . (:foreground "#119911")))
+  "Face used for the file path in a log message metadata.")
+
+(defface smblog-metadata-face
+  '((t . (:foreground "#999999")))
+  "Face used for a log message metadata.")
+
+(defface smblog-fun-face
+  '((t . (:foreground "#5555ff")))
+  "Face used for the function name in a message metadata.")
+
 (defvar-local smblog-log-file nil "Current file being viewed in the buffer")
 (defvar-local smblog-log-data nil "Vector of parsed log file")
 (defvar-local smblog-pos-map nil "Vector mapping id to point position")
@@ -157,11 +169,11 @@ The buffer must be visiting an actual file."
 	  (insert
 	   (propertize
 	    (concat
-	     (propertize (format "[%2d " level) 'face '(:family "DejaVu Sans" :foreground "#999999"))
-	     (propertize file 'face '(:foreground "#119911"))
-	     (propertize (format ":%d " nb) 'face '(:family "DejaVu Sans" :foreground "#999999"))
-	     (propertize fun 'face '(:foreground "#5555ff"))
-	     (propertize "]" 'face '(:family "DejaVu Sans" :foreground "#999999"))
+	     (propertize (format "[%2d " level) 'face 'smblog-metadata-face)
+	     (propertize file 'face 'smblog-file-face)
+	     (propertize (format ":%d " nb) 'face 'smblog-metadata-face)
+	     (propertize fun 'face 'smblog-fun-face)
+	     (propertize "]" 'face 'smblog-metadata-face)
 	     "\n" txt)
 	    'smblog-index i)))))))
 
