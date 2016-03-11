@@ -5,6 +5,7 @@
 ;; Author: Aurélien Aptel <aaptel@suse.com>
 ;; URL: http://github.com/aaptel/smblog-mode
 ;; Version: 1.0
+;; Package-Requires: ((emacs "24.3"))
 
 ;;; Commentary:
 
@@ -42,7 +43,7 @@
 
 ;;; Code:
 
-(require 'cl)
+(require 'cl-lib)
 (require 'rx)
 
 ;;;###autoload
@@ -146,9 +147,9 @@ The buffer must be visiting an actual file."
       (let* ((msg (aref smblog-log-data i))
 	     (level (car msg))
 	     (file (cadr msg))
-	     (nb (caddr msg))
-	     (fun (cadddr msg))
-	     (txt (car (cddddr msg))))
+	     (nb (cl-caddr msg))
+	     (fun (cl-cadddr msg))
+	     (txt (car (cl-cddddr msg))))
 	(when (and (<= level filt-level)
 		   (or (null filt-file-rx) (string-match filt-file-rx file))
 		   (or (null filt-fun-rx) (string-match  filt-fun-rx fun)))
@@ -225,7 +226,7 @@ The buffer must be visiting an actual file."
       (progn
 	(setq smblog-filter-level 10)
 	(message "Already at log level 10."))
-    (incf smblog-filter-level)
+    (cl-incf smblog-filter-level)
     (smblog-update)
     (message "Showing log up to level %d" smblog-filter-level)))
 
@@ -236,7 +237,7 @@ The buffer must be visiting an actual file."
       (progn
 	(setq smblog-filter-level 0)
 	(message "Already at log level 0."))
-    (decf smblog-filter-level)
+    (cl-decf smblog-filter-level)
     (smblog-update)
     (message "Showing log up to level %d" smblog-filter-level)))
 
@@ -246,7 +247,7 @@ The buffer must be visiting an actual file."
     (if p
 	(goto-char p)
       (while (and (>= id 0) (< id (length smblog-pos-map)) (null (aref smblog-pos-map id)))
-	(incf id step))
+	(cl-incf id step))
       (when (>= id 0)
 	(goto-char (aref smblog-pos-map id))))))
 
