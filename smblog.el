@@ -5,6 +5,7 @@
 ;; Author: Aurélien Aptel <aaptel@suse.com>
 ;; URL: http://github.com/aaptel/smblog-mode
 ;; Version: 1.0
+;; Package-Requires: ((emacs "24.3"))
 
 ;;; Commentary:
 
