@@ -56,7 +56,7 @@
 (defcustom smblog-src-dir (expand-file-name "~/prog/samba-git")
   "Path to samba source")
 
-(defvar smblog-time-rx (rx
+(defconst smblog-time-rx (rx
 			"["
 			(+ (or num "/")) ;; day
 			(+ " ")
