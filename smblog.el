@@ -287,6 +287,9 @@ The buffer must be visiting an actual file."
 				 (if smblog-filter-fun (format "func <%s>" smblog-filter-fun) "all func"))
 		      " and ")))
 
+(defun smblog-set-buffer-source-tree (dir)
+  (interactive "Ddir? ")
+  (set (make-local-variable 'smblog-src-dir) dir))
 
 ;;;###autoload
 (define-derived-mode smblog-mode special-mode "Smblog"
