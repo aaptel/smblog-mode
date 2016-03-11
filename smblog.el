@@ -14,6 +14,7 @@
 ;; - easy navigation (`n` and `p`)
 ;; - filter by log level (`+` and `-`), files&functions (`f`)
 ;; - go to the source file (`RET` on any part of the log message)
+;; - hilight log parts with different colors (`h`)
 
 ;;; License:
 
@@ -92,12 +93,36 @@
   '((t . (:foreground "#5555ff")))
   "Face used for the function name in a message metadata.")
 
+(defface smblog-hl-1-face
+  '((t . (:weight bold :background "orange")))
+  "Face #1 used for message hilights.")
+
+(defface smblog-hl-2-face
+  '((t . (:weight bold :background "green")))
+  "Face #2 used for message hilights.")
+
+(defface smblog-hl-3-face
+  '((t . (:weight bold :background "blue")))
+  "Face #3 used for message hilights.")
+
+(defface smblog-hl-4-face
+  '((t . (:weight bold :background "yellow")))
+  "Face #3 used for message hilights.")
+
+
+(defcustom smblog-hl-face-list '(smblog-hl-1-face
+				 smblog-hl-2-face
+				 smblog-hl-3-face
+				 smblog-hl-4-face)
+  "Faces used for highlighting in messages.")
+
 (defvar-local smblog-log-file nil "Current file being viewed in the buffer")
 (defvar-local smblog-log-data nil "Vector of parsed log file")
 (defvar-local smblog-pos-map nil "Vector mapping id to point position")
 (defvar-local smblog-filter-level 10 "Current log level being displayed")
 (defvar-local smblog-filter-file nil "Current log file filter")
 (defvar-local smblog-filter-fun nil "Current log function filter")
+(defvar-local smblog-hl-list nil "Current log highlight-regex list")
 
 (defun smblog-buf-name (file)
   "Return buffer name to be used to view FILE."
@@ -146,7 +171,19 @@ The buffer must be visiting an actual file."
 	  (push (list level file nb fun txt) msgs)))
       (apply 'vector (nreverse msgs)))))
 
-(defun smblog-insert-log (&optional filt-level filt-file filt-fun)
+(defun smblog-hl-propertize (txt hls)
+  (let ((faces smblog-hl-face-list))
+    (dolist (hl hls)
+      (let ((i 0)
+	    (face (car faces)))
+	(while (string-match hl txt i)
+	  (setq
+	   txt (replace-match (propertize (match-string 0 txt) 'face face) nil t txt)
+	   i (match-end 0))))
+      (setq faces (if (cdr faces) (cdr faces) faces))))
+  txt)
+
+(defun smblog-insert-log (&optional filt-level filt-file filt-fun hl-list)
   "Insert filtered/processed log content."
   (setq filt-level (or filt-level 10))
   (let ((len (length smblog-log-data))
@@ -174,7 +211,7 @@ The buffer must be visiting an actual file."
 	     (propertize (format ":%d " nb) 'face 'smblog-metadata-face)
 	     (propertize fun 'face 'smblog-fun-face)
 	     (propertize "]" 'face 'smblog-metadata-face)
-	     "\n" txt)
+	     "\n" (if hl-list (smblog-hl-propertize txt hl-list) txt))
 	    'smblog-index i)))))))
 
 (defun smblog-next-msg ()
@@ -269,7 +306,7 @@ The buffer must be visiting an actual file."
 	 (id (smblog-current-id))
 	 (offset (- (point) (aref smblog-pos-map id))))
     (erase-buffer)
-    (smblog-insert-log smblog-filter-level smblog-filter-file smblog-filter-fun)
+    (smblog-insert-log smblog-filter-level smblog-filter-file smblog-filter-fun smblog-hl-list)
     (smblog-move-close-to-id id -1)
     (when (= id (smblog-current-id))
       (forward-char offset))))
@@ -277,6 +314,17 @@ The buffer must be visiting an actual file."
 (defun smblog-glob-to-rx (glob)
   (setq glob (replace-regexp-in-string (rx (+ "*")) "*" glob))
   (mapconcat 'regexp-quote (split-string glob (rx "*")) ".*"))
+
+(defun smblog-hl-menu ()
+  (interactive)
+  (let ((c (read-char-choice "hilight:  [a]dd  [r]eset   [q]uit ? " '(?a ?r ?q))))
+    (cond
+     ((= c ?a)
+      (add-to-list 'smblog-hl-list (read-regexp "regex? ") t)
+      (smblog-update))
+     ((= c ?r)
+      (setq smblog-hl-list nil)
+      (smblog-update)))))
 
 (defun smblog-filter-menu ()
   (interactive)
@@ -313,7 +361,8 @@ The buffer must be visiting an actual file."
   (define-key smblog-mode-map (kbd "RET") 'smblog-goto-src)
   (define-key smblog-mode-map (kbd "+")   'smblog-inc-level)
   (define-key smblog-mode-map (kbd "-")   'smblog-dec-level)
-  (define-key smblog-mode-map (kbd "f")  'smblog-filter-menu))
+  (define-key smblog-mode-map (kbd "f")   'smblog-filter-menu)
+  (define-key smblog-mode-map (kbd "h")   'smblog-hl-menu))
 
 (provide 'smblog)
 ;;; smblog.el ends here

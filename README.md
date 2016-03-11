@@ -8,6 +8,7 @@ Emacs major mode for samba log files.
 - easy navigation (`n` and `p`)
 - filter by log level (`+` and `-`), files&functions (`f`)
 - go to the source file (`RET` on any part of the log message)
+- hilight log parts with different colors (`h`)
 
 ## Installation
 
