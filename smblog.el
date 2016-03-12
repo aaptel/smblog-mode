@@ -59,11 +59,11 @@
 
 (defconst smblog-time-rx (rx
 			"["
-			(+ (or num "/")) ;; day
+			(group (+ (or num "/"))) ;; day (1)
 			(+ " ")
-			(+ (or num ":" ".")) ;; time
+			(group (+ (or num ":" "."))) ;; time (2)
 			"," (+ " ")
-			(group (+ num)) ;; debug level (1)
+			(group (+ num)) ;; debug level (3)
 			(opt
 			 "," (+ " ")
 			 "pid=" (+ num)
@@ -71,11 +71,11 @@
 			 (+ (not (any "]")))) ;; effective/real uid/gid
 			"]"
 			" "
-			(group (+ graphic)) ;; file (2)
+			(group (+ graphic)) ;; file (4)
 			":"
-			(group (+ num)) ;; line (3)
+			(group (+ num)) ;; line (5)
 			"("
-			(group (+ (not (any ")")))) ;; function (4)
+			(group (+ (not (any ")")))) ;; function (6)
 			")"
 			"\n")
   "Regex matching a log message header")
@@ -92,6 +92,10 @@
 (defface smblog-fun-face
   '((t . (:foreground "#5555ff")))
   "Face used for the function name in a message metadata.")
+
+(defface smblog-date-face
+  '((t . (:foreground "#ff5555")))
+  "Face used for date and time in a log message metadata.")
 
 (defface smblog-hl-1-face
   '((t . (:weight bold :background "orange")))
@@ -158,17 +162,19 @@ The buffer must be visiting an actual file."
     (goto-char (point-min))
     (let (msgs)
       (while (search-forward-regexp smblog-time-rx nil 'noerror)
-	(let ((level (string-to-number (match-string 1)))
-	      (file (match-string 2))
-	      (nb (string-to-number (match-string 3)))
-	      (fun (match-string 4))
+	(let ((day (match-string 1))
+	      (time (match-string 2))
+	      (level (string-to-int (match-string 3)))
+	      (file (match-string 4))
+	      (nb (string-to-int (match-string 5)))
+	      (fun (match-string 6))
 	      (start (point))
 	      txt)
 
 	  (while (and (not (eobp)) (not (looking-at (rx bol "[20"))))
 	    (forward-line))
 	  (setq txt (buffer-substring start (point)))
-	  (push (list level file nb fun txt) msgs)))
+	  (push (list day time level file nb fun txt) msgs)))
       (apply 'vector (nreverse msgs)))))
 
 (defun smblog-hl-propertize (txt hls)
@@ -194,11 +200,13 @@ The buffer must be visiting an actual file."
 
     (dotimes (i len)
       (let* ((msg (aref smblog-log-data i))
-	     (level (car msg))
-	     (file (cadr msg))
-	     (nb (cl-caddr msg))
-	     (fun (cl-cadddr msg))
-	     (txt (car (cl-cddddr msg))))
+	     (day (nth 0 msg))
+	     (time (nth 1 msg))
+	     (level (nth 2 msg))
+	     (file (nth 3 msg))
+	     (nb  (nth 4 msg))
+	     (fun (nth 5 msg))
+	     (txt (nth 6 msg)))
 	(when (and (<= level filt-level)
 		   (or (null filt-file-rx) (string-match filt-file-rx file))
 		   (or (null filt-fun-rx) (string-match  filt-fun-rx fun)))
@@ -207,6 +215,9 @@ The buffer must be visiting an actual file."
 	   (propertize
 	    (concat
 	     (propertize (format "[%2d " level) 'face 'smblog-metadata-face)
+	     (propertize day 'face 'smblog-date-face)
+	     (propertize time 'face 'smblog-date-face)
+	     " "
 	     (propertize file 'face 'smblog-file-face)
 	     (propertize (format ":%d " nb) 'face 'smblog-metadata-face)
 	     (propertize fun 'face 'smblog-fun-face)
@@ -255,8 +266,8 @@ The buffer must be visiting an actual file."
   "Open the file that emited the message under the point."
   (interactive)
   (let* ((msg (smblog-current-msg))
-	 (file (nth 1 msg))
-	 (ln (nth 2 msg))
+	 (file (nth 3 msg))
+	 (ln (nth 4 msg))
 	 (fullpath (smblog-full-path file)))
     (if (null (file-exists-p fullpath))
 	(message (concat "Cannot open file %s\n"
