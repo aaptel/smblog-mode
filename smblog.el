@@ -14,7 +14,8 @@
 ;; - easy navigation (`n` and `p`)
 ;; - filter by log level (`+` and `-`), files&functions (`f`)
 ;; - go to the source file (`RET` on any part of the log message)
-;; - hilight log parts with different colors (`h`)
+;; - hilight regexes (ip addresses, pointers, users, ...) with different colors (`h`)
+;; - expand and collapse messages with `TAB`
 
 ;;; License:
 
@@ -222,7 +223,7 @@ The buffer must be visiting an actual file."
 	     (propertize (format ":%d " nb) 'face 'smblog-metadata-face)
 	     (propertize fun 'face 'smblog-fun-face)
 	     (propertize "]" 'face 'smblog-metadata-face)
-	     "\n" (if hl-list (smblog-hl-propertize txt hl-list) txt))
+	     "\n" (propertize (if hl-list (smblog-hl-propertize txt hl-list) txt) 'invisible nil))
 	    'smblog-index i)))))))
 
 (defun smblog-next-msg ()
@@ -362,10 +363,26 @@ The buffer must be visiting an actual file."
   (interactive "Ddir? ")
   (set (make-local-variable 'smblog-src-dir) dir))
 
+(defun smblog-toggle-msg ()
+  (interactive)
+  (when (bolp)
+    (end-of-line))
+
+  (let* ((beg-msg (aref smblog-pos-map (smblog-current-id)))
+	 (end (or (next-single-property-change beg-msg 'smblog-index) (point-max)))
+	 (beg-txt (save-excursion (goto-char beg-msg) (forward-line) (point))))
+    ;;(message "<%s>" (buffer-substring-no-properties beg end))
+    (goto-char beg-txt)
+    (let ((buffer-read-only nil)
+	  (new-val (not (get-text-property (point) 'invisible))))
+      (put-text-property beg-txt end 'invisible new-val))
+    (goto-char beg-msg)))
+
 ;;;###autoload
 (define-derived-mode smblog-mode special-mode "Smblog"
   "Major mode for viewing samba log files.
 \\{smblog-mode-map}"
+  ;;(add-to-invisibility-spec '(t . t))
   (define-key smblog-mode-map (kbd "n")   'smblog-next-msg)
   (define-key smblog-mode-map (kbd "p")   'smblog-prev-msg)
   (define-key smblog-mode-map (kbd "s")   'smblog-goto-src)
@@ -373,7 +390,8 @@ The buffer must be visiting an actual file."
   (define-key smblog-mode-map (kbd "+")   'smblog-inc-level)
   (define-key smblog-mode-map (kbd "-")   'smblog-dec-level)
   (define-key smblog-mode-map (kbd "f")   'smblog-filter-menu)
-  (define-key smblog-mode-map (kbd "h")   'smblog-hl-menu))
+  (define-key smblog-mode-map (kbd "h")   'smblog-hl-menu)
+  (define-key smblog-mode-map (kbd "TAB") 'smblog-toggle-msg))
 
 (provide 'smblog)
 ;;; smblog.el ends here
