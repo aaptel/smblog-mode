@@ -95,7 +95,7 @@
   "Face used for the function name in a message metadata.")
 
 (defface smblog-date-face
-  '((t . (:foreground "#ff5555")))
+  '((t . (:foreground "#555555")))
   "Face used for date and time in a log message metadata.")
 
 (defface smblog-hl-1-face
@@ -218,8 +218,7 @@ The buffer must be visiting an actual file."
 	   (propertize
 	    (concat
 	     (propertize (format "[%2d " level) 'face 'smblog-metadata-face)
-	     (propertize day 'face 'smblog-date-face)
-	     (propertize time 'face 'smblog-date-face)
+	     (propertize (concat day " " time) 'face 'smblog-date-face)
 	     " "
 	     (propertize file 'face 'smblog-file-face)
 	     (propertize (format ":%d " nb) 'face 'smblog-metadata-face)
