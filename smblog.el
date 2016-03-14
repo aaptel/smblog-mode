@@ -124,6 +124,7 @@
 (defvar-local smblog-log-file nil "Current file being viewed in the buffer")
 (defvar-local smblog-log-data nil "Vector of parsed log file")
 (defvar-local smblog-pos-map nil "Vector mapping id to point position")
+(defvar-local smblog-visible-map nil "Bool-vector mapping id to visibility (`t' for visible)")
 (defvar-local smblog-filter-level 10 "Current log level being displayed")
 (defvar-local smblog-filter-file nil "Current log file filter")
 (defvar-local smblog-filter-fun nil "Current log function filter")
@@ -152,6 +153,7 @@ The buffer must be visiting an actual file."
       (let ((buffer-read-only nil))
 	(setq smblog-log-file file)
 	(setq smblog-log-data (smblog-parse file))
+	(setq smblog-visible-map (make-bool-vector (length smblog-log-data) t))
 	(smblog-insert-log)
 	(goto-char (point-min))))
     (switch-to-buffer buf-name)))
@@ -319,6 +321,20 @@ The buffer must be visiting an actual file."
 	 (offset (- (point) (aref smblog-pos-map id))))
     (erase-buffer)
     (smblog-insert-log smblog-filter-level smblog-filter-file smblog-filter-fun smblog-hl-list)
+
+    ;; restore collapse state
+    (dotimes (i (length smblog-log-data))
+      (let ((p (aref smblog-pos-map i))
+	    (v (not (aref smblog-visible-map i))))
+	(when (and p v)
+	  (goto-char p)
+	  (forward-line)
+	  (put-text-property (point)
+			     (or
+			      (next-single-property-change (point) 'smblog-index)
+			      (point-max))
+			     'invisible t))))
+
     (smblog-move-close-to-id id -1)
     (when (= id (smblog-current-id))
       (forward-char offset))))
@@ -370,15 +386,24 @@ The buffer must be visiting an actual file."
   (when (bolp)
     (end-of-line))
 
-  (let* ((beg-msg (aref smblog-pos-map (smblog-current-id)))
+  (let* ((id (smblog-current-id))
+	 (beg-msg (aref smblog-pos-map id))
 	 (end (or (next-single-property-change beg-msg 'smblog-index) (point-max)))
 	 (beg-txt (save-excursion (goto-char beg-msg) (forward-line) (point))))
     ;;(message "<%s>" (buffer-substring-no-properties beg end))
     (goto-char beg-txt)
     (let ((buffer-read-only nil)
 	  (new-val (not (get-text-property (point) 'invisible))))
-      (put-text-property beg-txt end 'invisible new-val))
+      (put-text-property beg-txt end 'invisible new-val)
+      (aset smblog-visible-map id (not new-val)))
     (goto-char beg-msg)))
+
+(defun smblog-expand-all ()
+  "Expand all log in the current buffer."
+  (interactive)
+  (setq smblog-visible-map (make-bool-vector (length smblog-visible-map) t))
+  (let ((buffer-read-only nil))
+    (remove-list-of-text-properties (point-min) (point-max) '(invisible))))
 
 ;;;###autoload
 (define-derived-mode smblog-mode special-mode "Smblog"
