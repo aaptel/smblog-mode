@@ -360,10 +360,12 @@ The buffer must be visiting an actual file."
 		      " and ")))
 
 (defun smblog-set-buffer-source-tree (dir)
+  "Change current buffer C source directory."
   (interactive "Ddir? ")
   (set (make-local-variable 'smblog-src-dir) dir))
 
 (defun smblog-toggle-msg ()
+  "Collapse or expand current message under point."
   (interactive)
   (when (bolp)
     (end-of-line))
