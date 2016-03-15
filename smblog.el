@@ -503,7 +503,7 @@ The buffer must be visiting an actual file."
 (defun smblog-reqs-get-win (&optional vertical)
   "Return the (potentially new) window used to show requests."
   (when (null (window-live-p smblog-reqs-win))
-    (setq smblog-reqs-win (if vertical (split-window-below) (split-window-vertically))))
+    (setq smblog-reqs-win (if vertical (split-window-horizontally) (split-window-below))))
   (set-window-buffer smblog-reqs-win (smblog-reqs-get-buf))
   (set-window-dedicated-p smblog-reqs-win t)
   smblog-reqs-win)
@@ -586,7 +586,7 @@ The buffer must be visiting an actual file."
   (define-key smblog-reqs-mode-map (kbd "p")   'smblog-prev-req)
   (define-key smblog-reqs-mode-map (kbd "RET") 'smblog-jump-to-req)
   (define-key smblog-reqs-mode-map (kbd "h")   'smblog-reqs-help)
-  (define-key smblog-reqs-mode-map (kbd "q")   'quit-window))
+  (define-key smblog-reqs-mode-map (kbd "q")   'delete-window))
 
 ;;;###autoload
 (define-derived-mode smblog-mode special-mode "Smblog"
