@@ -151,6 +151,14 @@
 (defconst smblog-reqs-success-rx (rx bos (or "NT_STATUS_OK") eos)
   "Regex matching successful request status.")
 
+(defconst smblog-reqs-start-rx
+  (rx "smbd_smb2_request_dispatch: opcode[" (group (+ (not (any "]")))) "] mid = ")
+  "Regex matching the start of a SMB request (capture opcode).")
+
+(defconst smblog-reqs-end-rx
+  (rx "smbd_smb2_request_done_ex: idx[" (+ digit) "] status[" (group (+ (not (any "]")))) "]")
+  "Regex matching the end of a SMB request (capture status).")
+
 (defun smblog-buf-name (file)
   "Return buffer name to be used to view FILE."
   (format "*smblog: %s*" file))
@@ -427,6 +435,11 @@ The buffer must be visiting an actual file."
   (let ((buffer-read-only nil))
     (remove-list-of-text-properties (point-min) (point-max) '(invisible))))
 
+(defun smblog-msg-region (id)
+  (let* ((beg (aref smblog-pos-map id))
+         (end (or (next-single-property-change beg 'smblog-index) (point-max))))
+    (cons beg end)))
+
 (defun smblog-compute-reqs ()
   "Populate smblog-log-reqs variable with all the buffer SMB requests."
   (let (r
@@ -445,10 +458,9 @@ The buffer must be visiting an actual file."
 	    (txt (nth 6 m)))
 
 	(cond
-	 ((string-match (rx "smbd_smb2_request_dispatch: opcode[" (group (+ (not (any "]")))) "] mid = ") txt)
+	 ((string-match smblog-reqs-start-rx txt)
 	  (setq r (vector i (match-string 1 txt))))
-	 ((string-match (rx "smbd_smb2_request_done_ex: idx[" (+ digit)
-			    "] status[" (group (+ (not (any "]")))) "]") txt)
+	 ((string-match smblog-reqs-end-rx txt)
 	  (push (vconcat r (vector i (match-string 1 txt))) reqs)))
 
 	(incf i)))
