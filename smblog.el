@@ -127,6 +127,11 @@
   '((t . (:inherit bold)))
   "Face used for requests opcode.")
 
+(defface smblog-hilight-msg-face
+  '((((background dark)) (:background "#223322"))
+    (((background light)) (:background "#cceecc"))
+    (t . (:inverse-video t)))
+  "Face used to hilight whole message.")
 
 (defcustom smblog-hl-face-list '(smblog-hl-1-face
 				 smblog-hl-2-face
@@ -147,6 +152,8 @@
 (defvar-local smblog-reqs-win nil "Window used for displaying requests")
 (defvar-local smblog-reqs-log-buf nil "smblog buffer associated with current request buffer")
 (defvar-local smblog-reqs-log-win nil "smblog window associated with current request buffer")
+
+(defvar-local smblog-msg-overlay nil "whole message overlay")
 
 (defconst smblog-reqs-success-rx (rx bos (or "NT_STATUS_OK") eos)
   "Regex matching successful request status.")
@@ -440,6 +447,18 @@ The buffer must be visiting an actual file."
          (end (or (next-single-property-change beg 'smblog-index) (point-max))))
     (cons beg end)))
 
+(defun smblog-hilight-msg (&optional id)
+  (interactive)
+  (when (null id)
+    (setq id (smblog-current-id)))
+  (let* ((reg (smblog-msg-region id))
+	 (beg (car reg))
+	 (end (cdr reg)))
+    (when smblog-msg-overlay
+      (delete-overlay smblog-msg-overlay))
+    (setq smblog-msg-overlay (make-overlay beg end))
+    (overlay-put smblog-msg-overlay 'face 'smblog-hilight-msg-face)))
+
 (defun smblog-compute-reqs ()
   "Populate smblog-log-reqs variable with all the buffer SMB requests."
   (let (r
@@ -463,7 +482,7 @@ The buffer must be visiting an actual file."
 	 ((string-match smblog-reqs-end-rx txt)
 	  (push (vconcat r (vector i (match-string 1 txt))) reqs)))
 
-	(incf i)))
+	(cl-incf i)))
     (setq smblog-log-reqs (vconcat (nreverse reqs)))))
 
 
@@ -542,7 +561,8 @@ The buffer must be visiting an actual file."
     (with-selected-window smblog-reqs-log-win
       (let ((cur (smblog-current-id)))
 	(smblog-move-close-to-id
-	 (if (= cur start) end start) -1)))))
+	 (if (= cur start) end start) -1)
+	(smblog-hilight-msg)))))
 
 (define-derived-mode smblog-reqs-mode special-mode "Smblog Reqs"
   "Major mode for viewing smbd requests.
@@ -568,7 +588,6 @@ The buffer must be visiting an actual file."
   (define-key smblog-mode-map (kbd "h")   'smblog-hl-menu)
   (define-key smblog-mode-map (kbd "TAB") 'smblog-toggle-msg)
   (define-key smblog-mode-map (kbd "r")   'smblog-reqs-popup))
-
 
 (provide 'smblog)
 ;;; smblog.el ends here
