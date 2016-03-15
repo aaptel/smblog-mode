@@ -49,16 +49,6 @@
 (require 'cl-lib)
 (require 'rx)
 
-;;;###autoload
-(add-to-list
- 'auto-mode-alist
- (cons (rx (or "/" bos) "log." (or "nmbd" "smbd" "winbindd" "wb-"))
-       'smblog-mode-from-file-buffer))
-
-;;;###autoload
-(defcustom smblog-src-dir (expand-file-name "~/prog/samba-git")
-  "Path to samba source")
-
 (defconst smblog-time-rx (rx
 			"["
 			(group (+ (or num "/"))) ;; day (1)
@@ -82,6 +72,22 @@
 			"\n")
   "Regex matching a log message header")
 
+;;;###autoload
+(add-to-list
+ 'auto-mode-alist
+ (cons (rx (or "/" bos) "log." (or "nmbd" "smbd" "winbindd" "wb-"))
+       'smblog-mode-from-file-buffer))
+
+;;;###autoload
+(add-to-list
+ 'magic-fallback-mode-alist
+ (cons smblog-time-rx
+       'smblog-mode-from-file-buffer))
+
+
+;;;###autoload
+(defcustom smblog-src-dir (expand-file-name "~/prog/samba-git")
+  "Path to samba source")
 
 (defface smblog-file-face
   '((t . (:foreground "#119911")))
