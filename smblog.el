@@ -16,6 +16,7 @@
 ;; - go to the source file (`RET` on any part of the log message)
 ;; - hilight regexes (ip addresses, pointers, users, ...) with different colors (`h`)
 ;; - expand and collapse messages with `TAB`
+;; - list and jump to SMB requests and results (`r`)
 
 ;;; License:
 
@@ -114,6 +115,18 @@
   '((t . (:weight bold :background "yellow")))
   "Face #3 used for message hilights.")
 
+(defface smblog-reqs-success-face
+  '((t . (:inherit success)))
+  "Face used for successful requests.")
+
+(defface smblog-reqs-error-face
+  '((t . (:inherit error)))
+  "Face used for err requests.")
+
+(defface smblog-reqs-op-face
+  '((t . (:inherit bold)))
+  "Face used for requests opcode.")
+
 
 (defcustom smblog-hl-face-list '(smblog-hl-1-face
 				 smblog-hl-2-face
@@ -123,12 +136,20 @@
 
 (defvar-local smblog-log-file nil "Current file being viewed in the buffer")
 (defvar-local smblog-log-data nil "Vector of parsed log file")
+(defvar-local smblog-log-reqs nil "List of requests")
 (defvar-local smblog-pos-map nil "Vector mapping id to point position")
 (defvar-local smblog-visible-map nil "Bool-vector mapping id to visibility (`t' for visible)")
 (defvar-local smblog-filter-level 10 "Current log level being displayed")
 (defvar-local smblog-filter-file nil "Current log file filter")
 (defvar-local smblog-filter-fun nil "Current log function filter")
 (defvar-local smblog-hl-list nil "Current log highlight-regex list")
+
+(defvar-local smblog-reqs-win nil "Window used for displaying requests")
+(defvar-local smblog-reqs-log-buf nil "smblog buffer associated with current request buffer")
+(defvar-local smblog-reqs-log-win nil "smblog window associated with current request buffer")
+
+(defconst smblog-reqs-success-rx (rx bos (or "NT_STATUS_OK") eos)
+  "Regex matching successful request status.")
 
 (defun smblog-buf-name (file)
   "Return buffer name to be used to view FILE."
@@ -155,6 +176,7 @@ The buffer must be visiting an actual file."
 	(setq smblog-log-data (smblog-parse file))
 	(setq smblog-visible-map (make-bool-vector (length smblog-log-data) t))
 	(smblog-insert-log)
+	(smblog-compute-reqs)
 	(goto-char (point-min))))
     (switch-to-buffer buf-name)))
 
@@ -167,9 +189,9 @@ The buffer must be visiting an actual file."
       (while (search-forward-regexp smblog-time-rx nil 'noerror)
 	(let ((day (match-string 1))
 	      (time (match-string 2))
-	      (level (string-to-int (match-string 3)))
+	      (level (string-to-number (match-string 3)))
 	      (file (match-string 4))
-	      (nb (string-to-int (match-string 5)))
+	      (nb (string-to-number (match-string 5)))
 	      (fun (match-string 6))
 	      (start (point))
 	      txt)
@@ -279,7 +301,8 @@ The buffer must be visiting an actual file."
 			 "to make it point to the right directory")
 		 fullpath smblog-src-dir file)
       (find-file-other-window fullpath)
-      (goto-line ln))))
+      (goto-char (point-min))
+      (forward-line (1- ln)))))
 
 (defun smblog-inc-level ()
   "Increase verbosity of current log by 1 level."
@@ -304,7 +327,7 @@ The buffer must be visiting an actual file."
     (message "Showing log up to level %d" smblog-filter-level)))
 
 (defun smblog-move-close-to-id (id step)
-  "Move point to log ID if visible, otherwise move to closest visible log it in the direction of STEP."
+  "Move point to log ID if not filtered, otherwise move to closest log it in the direction of STEP."
   (let ((p (aref smblog-pos-map id)))
     (if p
 	(goto-char p)
@@ -404,6 +427,120 @@ The buffer must be visiting an actual file."
   (let ((buffer-read-only nil))
     (remove-list-of-text-properties (point-min) (point-max) '(invisible))))
 
+(defun smblog-compute-reqs ()
+  "Populate smblog-log-reqs variable with all the buffer SMB requests."
+  (let (r
+	reqs
+	(len (length smblog-log-data))
+	(i 0)
+	m)
+    (while (< i len)
+      (setq m (aref smblog-log-data i))
+      (let ((day (nth 0 m))
+	    (time (nth 1 m))
+	    (level (nth 2 m))
+	    (file (nth 3 m))
+	    (nb  (nth 4 m))
+	    (fun (nth 5 m))
+	    (txt (nth 6 m)))
+
+	(cond
+	 ((string-match (rx "smbd_smb2_request_dispatch: opcode[" (group (+ (not (any "]")))) "] mid = ") txt)
+	  (setq r (vector i (match-string 1 txt))))
+	 ((string-match (rx "smbd_smb2_request_done_ex: idx[" (+ digit)
+			    "] status[" (group (+ (not (any "]")))) "]") txt)
+	  (push (vconcat r (vector i (match-string 1 txt))) reqs)))
+
+	(incf i)))
+    (setq smblog-log-reqs (vconcat (nreverse reqs)))))
+
+
+
+(defun smblog-reqs-get-win ()
+  "Return the (potentially new) window used to show requests."
+  (when (null (window-live-p smblog-reqs-win))
+    (setq smblog-reqs-win (split-window-below)))
+  (set-window-buffer smblog-reqs-win (smblog-reqs-get-buf))
+  (set-window-dedicated-p smblog-reqs-win t)
+  smblog-reqs-win)
+
+(defun smblog-reqs-get-buf ()
+  "Return the buffer used to show requests."
+  (get-buffer-create (format " *smblog-reqs: %s*" smblog-log-file)))
+
+(defun smblog-propertize-status (status)
+  (propertize status
+	      'face
+	      (if (string-match smblog-reqs-success-rx status)
+		  'smblog-reqs-success-face
+		'smblog-reqs-error-face)))
+
+(defun smblog-reqs-popup ()
+  (interactive)
+  (let ((log-buf (current-buffer))
+	(reqs smblog-log-reqs)
+	(buf (smblog-reqs-get-buf))
+	(win (selected-window)))
+    (select-window (smblog-reqs-get-win))
+    (with-current-buffer buf
+      (smblog-reqs-mode)
+      (setq smblog-reqs-log-buf log-buf
+	    smblog-reqs-log-win win)
+      (let ((buffer-read-only nil))
+	(erase-buffer)
+	(mapc (lambda (r)
+		(let ((i-start (aref r 0))
+		      (op      (aref r 1))
+		      (i-end  (aref r 2))
+		      (status  (aref r 3)))
+		  (insert
+		   (propertize
+		    (format "SMB request %-25s, status %-30s\n"
+			    (propertize op 'face 'smblog-reqs-op-face)
+			    (smblog-propertize-status status))
+		    'smblog-index (cons i-start i-end)))))
+	      reqs))
+      (goto-char (point-min)))))
+
+
+(defun smblog-reqs-help ()
+  (interactive)
+  (message "Requests: [RET] cycle thru start/end of request   [n]ext  [p]rev [q]uit"))
+
+(defun smblog-next-req ()
+  "Move and jump to next request."
+  (interactive)
+  (forward-line)
+  (when (get-text-property (point) 'smblog-index)
+    (smblog-jump-to-req)))
+
+(defun smblog-prev-req ()
+  "Move and jump to previous request."
+  (interactive)
+  (forward-line -1)
+  (when (get-text-property (point) 'smblog-index)
+    (smblog-jump-to-req)))
+
+(defun smblog-jump-to-req ()
+  "Cycle thru the start and end of the request under point."
+  (interactive)
+  (let* ((ids (get-text-property (point) 'smblog-index))
+	 (start (car ids))
+	 (end (cdr ids)))
+    (with-selected-window smblog-reqs-log-win
+      (let ((cur (smblog-current-id)))
+	(smblog-move-close-to-id
+	 (if (= cur start) end start) -1)))))
+
+(define-derived-mode smblog-reqs-mode special-mode "Smblog Reqs"
+  "Major mode for viewing smbd requests.
+\\{smblog-reqs-mode-map}"
+  (define-key smblog-reqs-mode-map (kbd "n")   'smblog-next-req)
+  (define-key smblog-reqs-mode-map (kbd "p")   'smblog-prev-req)
+  (define-key smblog-reqs-mode-map (kbd "RET") 'smblog-jump-to-req)
+  (define-key smblog-reqs-mode-map (kbd "h")   'smblog-reqs-help)
+  (define-key smblog-reqs-mode-map (kbd "q")   'delete-window))
+
 ;;;###autoload
 (define-derived-mode smblog-mode special-mode "Smblog"
   "Major mode for viewing samba log files.
@@ -417,7 +554,9 @@ The buffer must be visiting an actual file."
   (define-key smblog-mode-map (kbd "-")   'smblog-dec-level)
   (define-key smblog-mode-map (kbd "f")   'smblog-filter-menu)
   (define-key smblog-mode-map (kbd "h")   'smblog-hl-menu)
-  (define-key smblog-mode-map (kbd "TAB") 'smblog-toggle-msg))
+  (define-key smblog-mode-map (kbd "TAB") 'smblog-toggle-msg)
+  (define-key smblog-mode-map (kbd "r")   'smblog-reqs-popup))
+
 
 (provide 'smblog)
 ;;; smblog.el ends here
