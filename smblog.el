@@ -96,7 +96,7 @@
   "Face used for the function name in a message metadata.")
 
 (defface smblog-date-face
-  '((t . (:foreground "#555555")))
+  '((t . (:foreground "#999999")))
   "Face used for date and time in a log message metadata.")
 
 (defface smblog-hl-1-face
@@ -128,7 +128,7 @@
   "Face used for requests opcode.")
 
 (defface smblog-hilight-msg-face
-  '((((background dark)) (:background "#223322"))
+  '((((background dark)) (:background "#192B14"))
     (((background light)) (:background "#cceecc"))
     (t . (:inverse-video t)))
   "Face used to hilight whole message.")
@@ -154,6 +154,7 @@
 (defvar-local smblog-reqs-log-win nil "smblog window associated with current request buffer")
 
 (defvar-local smblog-msg-overlay nil "whole message overlay")
+(defvar-local smblog-req-overlay nil "request line overlay")
 
 (defconst smblog-reqs-success-rx (rx bos (or "NT_STATUS_OK") eos)
   "Regex matching successful request status.")
@@ -357,6 +358,7 @@ The buffer must be visiting an actual file."
 	 (id (smblog-current-id))
 	 (offset (- (point) (aref smblog-pos-map id))))
     (erase-buffer)
+    (when (overlayp smblog-msg-overlay) (delete-overlay nil))
     (smblog-insert-log smblog-filter-level smblog-filter-file smblog-filter-fun smblog-hl-list)
 
     ;; restore collapse state
@@ -447,17 +449,21 @@ The buffer must be visiting an actual file."
          (end (or (next-single-property-change beg 'smblog-index) (point-max))))
     (cons beg end)))
 
-(defun smblog-hilight-msg (&optional id)
-  (interactive)
-  (when (null id)
-    (setq id (smblog-current-id)))
-  (let* ((reg (smblog-msg-region id))
-	 (beg (car reg))
-	 (end (cdr reg)))
+(defun smblog-hilight-msg-range (id-start id-end)
+  (let* ((beg (car (smblog-msg-region id-start)))
+	 (end (car (smblog-msg-region id-end))))
     (when smblog-msg-overlay
       (delete-overlay smblog-msg-overlay))
     (setq smblog-msg-overlay (make-overlay beg end))
     (overlay-put smblog-msg-overlay 'face 'smblog-hilight-msg-face)))
+
+(defun smblog-hilight-req ()
+  (let* ((beg (save-excursion (beginning-of-line)(point)))
+	 (end (save-excursion (end-of-line)(point))))
+    (when smblog-req-overlay
+      (delete-overlay smblog-req-overlay))
+    (setq smblog-req-overlay (make-overlay beg end))
+    (overlay-put smblog-req-overlay 'face 'smblog-hilight-msg-face)))
 
 (defun smblog-compute-reqs ()
   "Populate smblog-log-reqs variable with all the buffer SMB requests."
@@ -480,17 +486,18 @@ The buffer must be visiting an actual file."
 	 ((string-match smblog-reqs-start-rx txt)
 	  (setq r (vector i (match-string 1 txt))))
 	 ((string-match smblog-reqs-end-rx txt)
-	  (push (vconcat r (vector i (match-string 1 txt))) reqs)))
-
+	  (when r
+	    (push (vconcat r (vector i (match-string 1 txt))) reqs)
+	    (setq r nil))))
 	(cl-incf i)))
     (setq smblog-log-reqs (vconcat (nreverse reqs)))))
 
 
 
-(defun smblog-reqs-get-win ()
+(defun smblog-reqs-get-win (&optional vertical)
   "Return the (potentially new) window used to show requests."
   (when (null (window-live-p smblog-reqs-win))
-    (setq smblog-reqs-win (split-window-below)))
+    (setq smblog-reqs-win (if vertical (split-window-below) (split-window-vertically))))
   (set-window-buffer smblog-reqs-win (smblog-reqs-get-buf))
   (set-window-dedicated-p smblog-reqs-win t)
   smblog-reqs-win)
@@ -506,13 +513,13 @@ The buffer must be visiting an actual file."
 		  'smblog-reqs-success-face
 		'smblog-reqs-error-face)))
 
-(defun smblog-reqs-popup ()
-  (interactive)
+(defun smblog-reqs-popup (&optional arg-vertical)
+  (interactive "P")
   (let ((log-buf (current-buffer))
 	(reqs smblog-log-reqs)
 	(buf (smblog-reqs-get-buf))
 	(win (selected-window)))
-    (select-window (smblog-reqs-get-win))
+    (select-window (smblog-reqs-get-win arg-vertical))
     (with-current-buffer buf
       (smblog-reqs-mode)
       (setq smblog-reqs-log-buf log-buf
@@ -526,8 +533,9 @@ The buffer must be visiting an actual file."
 		      (status  (aref r 3)))
 		  (insert
 		   (propertize
-		    (format "SMB request %-25s, status %-30s\n"
-			    (propertize op 'face 'smblog-reqs-op-face)
+		    (format "SMB2 request %-18s ... response %-30s\n"
+			    (propertize (replace-regexp-in-string (rx bos "SMB2_OP_") "" op)
+					'face 'smblog-reqs-op-face)
 			    (smblog-propertize-status status))
 		    'smblog-index (cons i-start i-end)))))
 	      reqs))
@@ -558,11 +566,12 @@ The buffer must be visiting an actual file."
   (let* ((ids (get-text-property (point) 'smblog-index))
 	 (start (car ids))
 	 (end (cdr ids)))
+    (smblog-hilight-req)
     (with-selected-window smblog-reqs-log-win
       (let ((cur (smblog-current-id)))
 	(smblog-move-close-to-id
 	 (if (= cur start) end start) -1)
-	(smblog-hilight-msg)))))
+	(smblog-hilight-msg-range start end)))))
 
 (define-derived-mode smblog-reqs-mode special-mode "Smblog Reqs"
   "Major mode for viewing smbd requests.
@@ -571,13 +580,12 @@ The buffer must be visiting an actual file."
   (define-key smblog-reqs-mode-map (kbd "p")   'smblog-prev-req)
   (define-key smblog-reqs-mode-map (kbd "RET") 'smblog-jump-to-req)
   (define-key smblog-reqs-mode-map (kbd "h")   'smblog-reqs-help)
-  (define-key smblog-reqs-mode-map (kbd "q")   'delete-window))
+  (define-key smblog-reqs-mode-map (kbd "q")   'quit-window))
 
 ;;;###autoload
 (define-derived-mode smblog-mode special-mode "Smblog"
   "Major mode for viewing samba log files.
 \\{smblog-mode-map}"
-  ;;(add-to-invisibility-spec '(t . t))
   (define-key smblog-mode-map (kbd "n")   'smblog-next-msg)
   (define-key smblog-mode-map (kbd "p")   'smblog-prev-msg)
   (define-key smblog-mode-map (kbd "s")   'smblog-goto-src)
@@ -587,7 +595,8 @@ The buffer must be visiting an actual file."
   (define-key smblog-mode-map (kbd "f")   'smblog-filter-menu)
   (define-key smblog-mode-map (kbd "h")   'smblog-hl-menu)
   (define-key smblog-mode-map (kbd "TAB") 'smblog-toggle-msg)
-  (define-key smblog-mode-map (kbd "r")   'smblog-reqs-popup))
+  (define-key smblog-mode-map (kbd "r")   'smblog-reqs-popup)
+  (define-key smblog-mode-map (kbd "q")   'quit-window))
 
 (provide 'smblog)
 ;;; smblog.el ends here
