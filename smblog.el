@@ -365,7 +365,7 @@ The buffer must be visiting an actual file."
 	 (id (smblog-current-id))
 	 (offset (- (point) (aref smblog-pos-map id))))
     (erase-buffer)
-    (when (overlayp smblog-msg-overlay) (delete-overlay nil))
+    (when (overlayp smblog-msg-overlay) (delete-overlay smblog-msg-overlay))
     (smblog-insert-log smblog-filter-level smblog-filter-file smblog-filter-fun smblog-hl-list)
 
     ;; restore collapse state
