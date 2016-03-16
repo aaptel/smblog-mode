@@ -525,28 +525,30 @@ The buffer must be visiting an actual file."
 	(reqs smblog-log-reqs)
 	(buf (smblog-reqs-get-buf))
 	(win (selected-window)))
-    (select-window (smblog-reqs-get-win arg-vertical))
-    (with-current-buffer buf
-      (smblog-reqs-mode)
-      (setq smblog-reqs-log-buf log-buf
-	    smblog-reqs-log-win win)
-      (let ((buffer-read-only nil))
-	(erase-buffer)
-	(mapc (lambda (r)
-		(let ((i-start (aref r 0))
-		      (op      (aref r 1))
-		      (i-end  (aref r 2))
-		      (status  (aref r 3)))
-		  (insert
-		   (propertize
-		    (format "SMB2 request %-18s ... response %-30s\n"
-			    (propertize (replace-regexp-in-string (rx bos "SMB2_OP_") "" op)
-					'face 'smblog-reqs-op-face)
-			    (smblog-propertize-status status))
-		    'smblog-index (cons i-start i-end)))))
-	      reqs))
-      (goto-char (point-min)))))
-
+    (if (or (null smblog-log-reqs) (= 0 (length smblog-log-reqs)))
+	(message "No SMB requests found. This might not be a smbd log.")
+      (select-window (smblog-reqs-get-win arg-vertical))
+      (with-current-buffer buf
+	(smblog-reqs-mode)
+	(setq smblog-reqs-log-buf log-buf
+	      smblog-reqs-log-win win)
+	(let ((buffer-read-only nil))
+	  (erase-buffer)
+	  (mapc (lambda (r)
+		  (let ((i-start (aref r 0))
+			(op      (aref r 1))
+			(i-end  (aref r 2))
+			(status  (aref r 3)))
+		    (insert
+		     (propertize
+		      (format "SMB2 request %-18s ... response %-30s\n"
+			      (propertize (replace-regexp-in-string (rx bos "SMB2_OP_") "" op)
+					  'face 'smblog-reqs-op-face)
+			      (smblog-propertize-status status))
+		      'smblog-index (cons i-start i-end)))))
+		reqs))
+	(goto-char (point-min)))
+      (smblog-reqs-help))))
 
 (defun smblog-reqs-help ()
   (interactive)
