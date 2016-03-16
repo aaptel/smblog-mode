@@ -320,8 +320,9 @@ The buffer must be visiting an actual file."
 	(message (concat "Cannot open file %s\n"
 			 "smblog-src-dir: %s\n"
 			 "          file: %s (any leading ../ removed)\n\n"
-			 "User M-x set-variable smblog-src-dir RET \"your-samba/path\" RET "
-			 "to make it point to the right directory")
+			 "Use M-x set-variable smblog-src-dir RET \"your-samba/path\" RET "
+			 "to make it point to the right directory.\n"
+			 "Alternatively use M-x smblog-set-buffer-source-tree to set it only for this buffer.")
 		 fullpath smblog-src-dir file)
       (find-file-other-window fullpath)
       (goto-char (point-min))
