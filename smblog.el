@@ -49,6 +49,7 @@
 (require 'cl-lib)
 (require 'rx)
 
+;;;###autoload
 (defconst smblog-time-rx (rx
 			"["
 			(group (+ (or num "/"))) ;; day (1)
