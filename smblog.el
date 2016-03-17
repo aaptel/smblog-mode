@@ -427,8 +427,23 @@ The buffer must be visiting an actual file."
   (interactive "Ddir? ")
   (set (make-local-variable 'smblog-src-dir) dir))
 
-(defun smblog-toggle-msg ()
-  "Collapse or expand current message under point."
+(defun smblog-toggle-msg (&optional action)
+  "Collapse or expand current msg under point or all msg in the region."
+  (interactive)
+  (if (use-region-p)
+      (let ((beg (region-beginning))
+	    (end (region-end))
+	    (continue t))
+	(save-excursion
+	  (goto-char beg)
+	  (while (and (< (point) end) continue)
+	    (smblog-toggle-msg-1)
+	    (setq continue (not (null (smblog-next-msg)))))))
+    (smblog-toggle-msg-1)))
+
+(defun smblog-toggle-msg-1 (&optional action)
+  "Collapse or expand current message under point.
+ACTION can be one of `collapse' or `expand'. Anything else will toggle the current state."
   (interactive)
   (when (bolp)
     (end-of-line))
@@ -438,7 +453,10 @@ The buffer must be visiting an actual file."
 	 (end (cdr reg))
 	 (beg (car reg))
 	 (beg-txt (progn (goto-char beg)(forward-line)(point)))
-	 (new-val (not (get-text-property (point) 'invisible)))
+	 (new-val (cond
+		   ((eq action 'collapse) t)
+		   ((eq action 'expand) nil)
+		   (t (not (get-text-property (point) 'invisible)))))
 	 (buffer-read-only nil))
     (put-text-property beg-txt end 'invisible new-val)
     (aset smblog-visible-map id (not new-val))
