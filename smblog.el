@@ -315,18 +315,28 @@ The buffer must be visiting an actual file."
   (let* ((msg (smblog-current-msg))
 	 (file (aref msg 3))
 	 (ln (aref msg 4))
-	 (fullpath (smblog-full-path file)))
-    (if (null (file-exists-p fullpath))
-	(message (concat "Cannot open file %s\n"
-			 "smblog-src-dir: %s\n"
-			 "          file: %s (any leading ../ removed)\n\n"
-			 "Use M-x set-variable smblog-src-dir RET \"your-samba/path\" RET "
-			 "to make it point to the right directory.\n"
-			 "Alternatively use M-x smblog-set-buffer-source-tree to set it only for this buffer.")
-		 fullpath smblog-src-dir file)
-      (find-file-other-window fullpath)
-      (goto-char (point-min))
-      (forward-line (1- ln)))))
+	 (dir smblog-src-dir)
+	 fullpath)
+
+    (while (null (file-exists-p (setq fullpath (let ((smblog-src-dir dir)) (smblog-full-path file)))))
+      (setq dir (read-directory-name
+		 (format
+		  (concat
+		   "Cannot open file %s\n"
+		   "smblog-src-dir: %s\n"
+		   "          file: %s (any leading ../ removed)\n\n"
+		   "New smblog-src-dir value: ")
+		  fullpath dir file))))
+
+    (when (not (string= dir smblog-src-dir))
+      (if (y-or-n-p "Make setting global (yes) or buffer-local (no)")
+	  (setq smblog-src-dir (expand-file-name dir))
+	(setq-local smblog-src-dir (expand-file-name dir)))
+      (message "You can set a buffer-local version of smblog-src-dir using M-x smblog-set-buffer-source-tree"))
+
+    (find-file-other-window fullpath)
+    (goto-char (point-min))
+    (forward-line (1- ln))))
 
 (defun smblog-inc-level ()
   "Increase verbosity of current log by 1 level."
