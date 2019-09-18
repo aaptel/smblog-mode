@@ -59,19 +59,56 @@
 			(group (+ num)) ;; debug level (3)
 			(opt
 			 "," (+ " ")
-			 "pid=" (+ num)
+			 "pid=" (group (+ num)) ;; pid (4)
 			 "," (+ " ")
 			 (+ (not (any "]")))) ;; effective/real uid/gid
 			"]"
 			" "
-			(group (+ graphic)) ;; file (4)
+			(group (+ graphic)) ;; file (5)
 			":"
-			(group (+ num)) ;; line (5)
+			(group (+ num)) ;; line (6)
 			"("
-			(group (+ (not (any ")")))) ;; function (6)
+			(group (+ (not (any ")")))) ;; function (7)
 			")"
 			"\n")
   "Regex matching a log message header")
+
+(defun smblog-make-msg (date time level pid file line func txt)
+  "Create a message object"
+  (vector date time level pid file line func txt))
+(defun smblog-msg-date (m)
+  (aref m 0))
+(defun smblog-msg-time (m)
+  (aref m 1))
+(defun smblog-msg-level (m)
+  (aref m 2))
+(defun smblog-msg-pid (m)
+  (aref m 3))
+(defun smblog-msg-file (m)
+  (aref m 4))
+(defun smblog-msg-line (m)
+  (aref m 5))
+(defun smblog-msg-func (m)
+  (aref m 6))
+(defun smblog-msg-txt (m)
+  (aref m 7))
+
+(defun smblog-make-req (msgid opcode mid)
+  ;;      0:start 1      2:mid  3:end  4:status
+  (vector msgid   opcode mid    nil    nil))
+(defun smblog-req-set-result (req end res)
+  (aset req 3 end)
+  (aset req 4 res))
+(defun smblog-req-start (r)
+  (aref r 0))
+(defun smblog-req-opcode (r)
+  (aref r 1))
+(defun smblog-req-mid (r)
+  (aref r 2))
+(defun smblog-req-end (r)
+  (aref r 3))
+(defun smblog-req-status (r)
+  (aref r 4))
 
 ;;;###autoload
 (add-to-list
@@ -93,6 +130,10 @@
 (defface smblog-file-face
   '((t . (:foreground "#119911")))
   "Face used for the file path in a log message metadata.")
+
+(defface smblog-pid-face
+  '((t . (:foreground "#999999")))
+  "Face used for the pid in a message metadata.")
 
 (defface smblog-metadata-face
   '((t . (:foreground "#999999")))
@@ -167,7 +208,7 @@
   "Regex matching successful request status.")
 
 (defconst smblog-reqs-start-rx
-  (rx "smbd_smb2_request_dispatch: opcode[" (group (+ (not (any "]")))) "] mid = ")
+  (rx "smbd_smb2_request_dispatch: opcode[" (group (+ (not (any "]")))) "] mid = " (group (+ digit)))
   "Regex matching the start of a SMB request (capture opcode).")
 
 (defconst smblog-reqs-end-rx
@@ -213,16 +254,18 @@ The buffer must be visiting an actual file."
 	(let ((day (match-string 1))
 	      (time (match-string 2))
 	      (level (string-to-number (match-string 3)))
-	      (file (match-string 4))
-	      (nb (string-to-number (match-string 5)))
-	      (fun (match-string 6))
+	      (pid (string-to-number (or (match-string 4) "0")))
+	      (file (match-string 5))
+	      (nb (string-to-number (match-string 6)))
+	      (fun (match-string 7))
 	      (start (point))
 	      txt)
 
 	  (while (and (not (eobp)) (not (looking-at (rx bol "[20"))))
 	    (forward-line))
 	  (setq txt (buffer-substring start (point)))
-	  (push (vector day time level file nb fun txt) msgs)))
+	  ;;            0   1    2     3   4    5  6   7
+	  (push (vector day time level pid file nb fun txt) msgs)))
       (apply 'vector (nreverse msgs)))))
 
 (defun smblog-hl-propertize (txt hls)
@@ -248,13 +291,14 @@ The buffer must be visiting an actual file."
 
     (dotimes (i len)
       (let* ((msg (aref smblog-log-data i))
-	     (day (aref msg 0))
-	     (time (aref msg 1))
-	     (level (aref msg 2))
-	     (file (aref msg 3))
-	     (nb  (aref msg 4))
-	     (fun (aref msg 5))
-	     (txt (aref msg 6)))
+	     (day (smblog-msg-date msg))
+	     (time (smblog-msg-time msg))
+	     (level (smblog-msg-level msg))
+	     (pid (smblog-msg-pid msg))
+	     (file (smblog-msg-file msg))
+	     (nb  (smblog-msg-line msg))
+	     (fun (smblog-msg-func msg))
+	     (txt (smblog-msg-txt msg)))
 	(when (and (<= level filt-level)
 		   (or (null filt-file-rx) (string-match filt-file-rx file))
 		   (or (null filt-fun-rx) (string-match  filt-fun-rx fun)))
@@ -264,6 +308,7 @@ The buffer must be visiting an actual file."
 	    (concat
 	     (propertize (format "[%2d " level) 'face 'smblog-metadata-face)
 	     (propertize (concat day " " time) 'face 'smblog-date-face)
+	     (when (/= pid 0) (concat " pid=" (propertize (number-to-string pid) 'face 'smblog-pid-face)))
 	     " "
 	     (propertize file 'face 'smblog-file-face)
 	     (propertize (format ":%d " nb) 'face 'smblog-metadata-face)
@@ -313,8 +358,8 @@ The buffer must be visiting an actual file."
   "Open the file that emited the message under the point."
   (interactive)
   (let* ((msg (smblog-current-msg))
-	 (file (aref msg 3))
-	 (ln (aref msg 4))
+	 (file (smblog-msg-file msg))
+	 (ln (smblog-msg-line msg))
 	 (dir smblog-src-dir)
 	 fullpath)
 
@@ -509,19 +554,20 @@ ACTION can be one of `collapse' or `expand'. Anything else will toggle the curre
 	m)
     (while (< i len)
       (setq m (aref smblog-log-data i))
-      (let ((day (aref m 0))
-	    (time (aref m 1))
-	    (level (aref m 2))
-	    (file (aref m 3))
-	    (nb  (aref m 4))
-	    (fun (aref m 5))
-	    (txt (aref m 6)))
+      (let ((day (smblog-msg-date m))
+	    (time (smblog-msg-time m))
+	    (level (smblog-msg-level m))
+	    (file (smblog-msg-file m))
+	    (nb  (smblog-msg-line m))
+	    (fun (smblog-msg-func m))
+	    (txt (smblog-msg-txt m)))
 	(cond
 	 ((string-match smblog-reqs-start-rx txt)
-	  (setq r (vector i (match-string 1 txt))))
+	  (setq r (smblog-make-req i (match-string 1 txt) (string-to-number (match-string 2 txt)))))
 	 ((string-match smblog-reqs-end-rx txt)
 	  (when r
-	    (push (vconcat r (vector i (match-string 1 txt))) reqs)
+	    (smblog-req-set-result r i (match-string 1 txt))
+	    (push r reqs)
 	    (setq r nil))))
 	(cl-incf i)))
     (setq smblog-log-reqs (vconcat (nreverse reqs)))))
@@ -547,6 +593,9 @@ ACTION can be one of `collapse' or `expand'. Anything else will toggle the curre
 		  'smblog-reqs-success-face
 		'smblog-reqs-error-face)))
 
+(defun smblog-req-dump-packet (r)
+  
+
 (defun smblog-reqs-popup (&optional arg-vertical)
   (interactive "P")
   (let ((log-buf (current-buffer))
@@ -554,7 +603,7 @@ ACTION can be one of `collapse' or `expand'. Anything else will toggle the curre
 	(buf (smblog-reqs-get-buf))
 	(win (selected-window)))
     (if (or (null smblog-log-reqs) (= 0 (length smblog-log-reqs)))
-	(message "No SMB requests found. This might not be a smbd log.")
+	(message "No SMB2 requests found. This might not be a smbd log or it contains no SMB2 traffic.")
       (select-window (smblog-reqs-get-win arg-vertical))
       (with-current-buffer buf
 	(smblog-reqs-mode)
@@ -563,13 +612,15 @@ ACTION can be one of `collapse' or `expand'. Anything else will toggle the curre
 	(let ((buffer-read-only nil))
 	  (erase-buffer)
 	  (mapc (lambda (r)
-		  (let ((i-start (aref r 0))
-			(op      (aref r 1))
-			(i-end  (aref r 2))
-			(status  (aref r 3)))
+		  (let ((i-start (smblog-req-start r))
+			(op      (smblog-req-opcode r))
+			(mid     (smblog-req-mid r))
+			(i-end   (smblog-req-end r))
+			(status  (smblog-req-status r)))
 		    (insert
 		     (propertize
-		      (format "SMB2 request %-18s ... response %-30s\n"
+		      (format "SMB2 request mid=%-5d %-18s ... response %-30s\n"
+			      mid
 			      (propertize (replace-regexp-in-string (rx bos "SMB2_OP_") "" op)
 					  'face 'smblog-reqs-op-face)
 			      (smblog-propertize-status status))
