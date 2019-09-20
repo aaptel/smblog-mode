@@ -264,8 +264,7 @@ The buffer must be visiting an actual file."
 	  (while (and (not (eobp)) (not (looking-at (rx bol "[20"))))
 	    (forward-line))
 	  (setq txt (buffer-substring start (point)))
-	  ;;            0   1    2     3   4    5  6   7
-	  (push (vector day time level pid file nb fun txt) msgs)))
+	  (push (smblog-make-msg day time level pid file nb fun txt) msgs)))
       (apply 'vector (nreverse msgs)))))
 
 (defun smblog-hl-propertize (txt hls)
