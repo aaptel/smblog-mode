@@ -562,6 +562,10 @@ ACTION can be one of `collapse' or `expand'. Anything else will toggle the curre
 	    (txt (smblog-msg-txt m)))
 	(cond
 	 ((string-match smblog-reqs-start-rx txt)
+	  (when r
+	    ;; incomplete request
+	    (smblog-req-set-result r (smblog-req-start r) "INCOMPLETE")
+	    (push r reqs))
 	  (setq r (smblog-make-req i (match-string 1 txt) (string-to-number (match-string 2 txt)))))
 	 ((string-match smblog-reqs-end-rx txt)
 	  (when r
