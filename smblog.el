@@ -593,7 +593,7 @@ ACTION can be one of `collapse' or `expand'. Anything else will toggle the curre
 		  'smblog-reqs-success-face
 		'smblog-reqs-error-face)))
 
-(defun smblog-req-dump-packet (r)
+;;(defun smblog-req-dump-packet (r)
   
 
 (defun smblog-reqs-popup (&optional arg-vertical)
