@@ -212,7 +212,7 @@
   "Regex matching the start of a SMB request (capture opcode).")
 
 (defconst smblog-reqs-end-rx
-  (rx "smbd_smb2_request_done_ex: idx[" (+ digit) "] status[" (group (+ (not (any "]")))) "]")
+  (rx "smbd_smb2_request_done_ex: " (optional "mid [" (+ digit) "] ") "idx[" (+ digit) "] status[" (group (+ (not (any "]")))) "]")
   "Regex matching the end of a SMB request (capture status).")
 
 (defun smblog-buf-name (file)
